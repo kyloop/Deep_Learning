@@ -1,6 +1,6 @@
 """
 8/2018 nt:
-NN578_network.py
+578hw1.py (modified from NN578_network.py)
 ==============
 
 Modified from the NNDL book code "network.py" to be 
@@ -79,7 +79,7 @@ class Network(object):
         #print("n_test", n_test)
         
         n = len(training_data)
-        
+        result_lst=np.array([])
         for epoch in range(epochs): #xrange(epochs):
             
             random.shuffle(training_data)
@@ -91,9 +91,9 @@ class Network(object):
                 self.update_mini_batch(mini_batch, eta)
                 test_output_lst=[]
             
+            #Call Function:evaluate() to test on training data after backpropagation
             train_output_lst = self.evaluate(training_data)
-            #print("len train_output_lst", len(train_output_lst))
-            #print("train_output_lst",train_output_lst)
+            #Print Testing Set Result for each Epoch
             print("[epoch %d]"%(epoch), end=" ")
             print ("Training: MSE=%0.7f, CrossEntropy=%0.7f, LogLikelihood=%0.7f, Correct=%d/%d , Accuracy=%0.4f" % (
                 train_output_lst[0], 
@@ -103,21 +103,28 @@ class Network(object):
                 n, 
                 train_output_lst[4]))
 
+            #Print Testing Set Result for each Epoch
             if test_data:
-                output_lst = self.evaluate(test_data)
+                test_output_lst = self.evaluate(test_data)
                 print ("          Test:     MSE=%0.7f, CrossEntropy=%0.7f, LogLikelihood=%0.7f, Correct=%d/%d , Accuracy=%0.4f" % ( 
-                    output_lst[0],
-                    output_lst[1],
-                    output_lst[2],
-                    output_lst[3], 
+                    test_output_lst[0],
+                    test_output_lst[1],
+                    test_output_lst[2],
+                    test_output_lst[3], 
                     n_test, 
-                    output_lst[4]))
-            else:
-                print ("          Test:     No testing data")
+                    test_output_lst[4]))
+            else: print ("          Test:     No testing data")
             
-            if  int(train_output_lst[4]) == 1:
-                #print("int(output_lst[4])", int(output_lst[4]))
-                break
+            lst= np.array([np.concatenate(([train_output_lst],[test_output_lst]))])
+            if result_lst.shape[0] ==0:
+                result_lst = lst
+            else:
+                result_lst = np.concatenate((result_lst,lst), axis=0)
+
+            #Break Learning Training Loop when Accuracy = 100%
+            if  int(train_output_lst[4]) == 1: break
+        return (result_lst)
+
 
     def update_mini_batch(self, mini_batch, eta):
         """Update the network's weights and biases by applying
@@ -200,29 +207,34 @@ class Network(object):
         network outputs the correct result. Note that the neural
         network's output is assumed to be the index of whichever
         neuron in the final layer has the highest activation."""
+        
+        #Number of test instances passing into this function
         n = len(test_data)
+        
         test_result_lst = [(self.feedforward(x), y) for (x, y) in test_data]
         
+        #Find maximum indexes from the predicted outputs and true outputs List
         test_correct_case_lst = [(np.argmax(a), np.argmax(y)) for (a, y) in test_result_lst]
+                
+        #Calculate the number cases predicted vs true outputs
         correct_case = sum([int(x == y) for (x, y) in test_correct_case_lst])
+
+        #Calculate Accuracy of predicted outputs
         accuracy = [correct_case / n]
 
+        #Calculate MSE for Predicted vs True outputs
         test_mse_lst = [np.mean(np.array([(0.5)*(np.linalg.norm(a-y)**2) for (a, y) in test_result_lst]))]
+
+        #Calculate Cross-Entropy for Predicted vs True outputs
         test_crossEntropy_lst = [np.mean(np.array([np.sum(np.nan_to_num(-y*np.log(a)-(1-y)*np.log(1-a))) for (a, y) in test_result_lst]))]
+
+        #Calculate Log-Likelihood for Predicted vs True outputs
         test_logLikelihood_lst = [np.mean(np.array([-np.sum(np.nan_to_num(np.log(a))) for (a, y) in test_result_lst]))]
-        
-        #print("correct_case", correct_case)
-        #print("len(test_data)", len(test_data))
-        #print("accuracy", accuracy)
-        #print("test_mse_lst", test_mse_lst)
-        #print("test_crossEntropy_lst", test_crossEntropy_lst)
-        #print("test_logLikelihood_lst", test_logLikelihood_lst)
-        #print("test_data",test_data)
-        
-        
+            
+        #Combine all the Error meausrment metrics into a List format.
         outLst=test_mse_lst+test_crossEntropy_lst+test_logLikelihood_lst+[correct_case] + accuracy
-        #print("outLst", outLst)
-        return outLst
+        
+        return( outLst)
 
     def cost_derivative(self, output_activations, y):
         """Return the vector of partial derivatives \partial C_x /
