@@ -53,15 +53,10 @@ class Network(object):
 
 
 
-
-
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
         for b, w in zip(self.biases, self.weights):
-            #print("feedforward b",b)
-            #print("feedforward w",w)
             a = sigmoid(np.dot(w, a)+b)
-            #print("feedforward a", a)
         return a
 
     def SGD(self, training_data, epochs, mini_batch_size, eta, test_data=None):
@@ -75,11 +70,11 @@ class Network(object):
         tracking progress, but slows things down substantially."""
         if test_data: n_test = len(test_data)
         else: n_test =0
-
-        #print("n_test", n_test)
         
         n = len(training_data)
         result_lst=np.array([])
+        train_output_lst=[]
+        test_output_lst=[]
         for epoch in range(epochs): #xrange(epochs):
             
             random.shuffle(training_data)
@@ -89,42 +84,34 @@ class Network(object):
 
             for mini_batch in mini_batches:
                 self.update_mini_batch(mini_batch, eta)
-                test_output_lst=[]
             
             #Call Function:evaluate() to test on training data after backpropagation
-            train_output_lst = self.evaluate(training_data)
-            #Print Testing Set Result for each Epoch
-            print("[epoch %d]"%(epoch), end=" ")
-            print ("Training: MSE=%0.7f, CrossEntropy=%0.7f, LogLikelihood=%0.7f, Correct=%d/%d , Accuracy=%0.4f" % (
-                train_output_lst[0], 
-                train_output_lst[1],
-                train_output_lst[2],
-                train_output_lst[3], 
-                n, 
-                train_output_lst[4]))
-
-            #Print Testing Set Result for each Epoch
-            if test_data:
-                test_output_lst = self.evaluate(test_data)
-                print ("          Test:     MSE=%0.7f, CrossEntropy=%0.7f, LogLikelihood=%0.7f, Correct=%d/%d , Accuracy=%0.4f" % ( 
-                    test_output_lst[0],
-                    test_output_lst[1],
-                    test_output_lst[2],
-                    test_output_lst[3], 
-                    n_test, 
-                    test_output_lst[4]))
-            else: print ("          Test:     No testing data")
+            #Store all the training measurment result into a list
+            train_output=self.evaluate(training_data)
+            train_output_lst.append(list(train_output))
             
-            lst= np.array([np.concatenate(([train_output_lst],[test_output_lst]))])
-            if result_lst.shape[0] ==0:
-                result_lst = lst
-            else:
-                result_lst = np.concatenate((result_lst,lst), axis=0)
+            #Only for Demonstration: Print Testing Set Result for each Epoch
+            #print("[epoch %d]"%(epoch), end=" ")
+            #print ("Training: MSE=%0.7f, CrossEntropy=%0.7f, LogLikelihood=%0.7f, Correct=%d/%d , Accuracy=%0.4f" % (
+              #  train_output[2], train_output[3],train_output[4],train_output[0], n, train_output[1]))
+
+            #Only for Demonstration: Print Testing Set Result for each Epoch
+            if test_data:
+                #Call Function:evaluate() to test on training data after backpropagation
+                test_output = self.evaluate(test_data)
+                test_output_lst.append(list(test_output))
+               # print ("          Test:     MSE=%0.7f, CrossEntropy=%0.7f, LogLikelihood=%0.7f, Correct=%d/%d , Accuracy=%0.4f" % ( 
+                #    test_output[2],test_output[3],test_output[4],test_output[0], n_test, test_output[1]))
+            else: 
+                #print ("          Test:     No testing data") #Print if NO testing data pass in 
+                #Store all the training measurment result into a list
+                test_output_lst.append(list(np.array([])))
 
             #Break Learning Training Loop when Accuracy = 100%
-            if  int(train_output_lst[4]) == 1: break
-        return (result_lst)
+            if  int(train_output[1]) == 1: 
+                break
 
+        return [train_output_lst, test_output_lst]
 
     def update_mini_batch(self, mini_batch, eta):
         """Update the network's weights and biases by applying
@@ -132,9 +119,7 @@ class Network(object):
         The ``mini_batch`` is a list of tuples ``(x, y)``, and ``eta``
         is the learning rate."""
         nabla_b = [np.zeros(b.shape) for b in self.biases]
-        #print("nabla_b", nabla_b)
         nabla_w = [np.zeros(w.shape) for w in self.weights]
-        #print("nabla_w", nabla_w)
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
@@ -144,10 +129,6 @@ class Network(object):
         self.biases = [b-(eta/len(mini_batch))*nb
                        for b, nb in zip(self.biases, nabla_b)]
 
-
-
-
-
     def backprop(self, x, y):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
         gradient for the cost function C_x.  ``nabla_b`` and
@@ -156,19 +137,15 @@ class Network(object):
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
 
-        #Initialize list to hold the activations (hidden layer outputs) 
-        #, inputs and outputs
+        #Initialize list to hold the activations (hidden layer outputs),inputs and outputs
         activations=list(np.empty((self.num_layers,1)))
         for i in range(len(self.sizes)):
-            #print("i",i)
             activations[i]= np.zeros((self.sizes[i],1))
         
         # feedforward
         activation = x
         activations[0] = x  # list to store all the activations, layer by layer
         zs = [] # list to store all the z vectors, layer by layer
-        #print("self.weights",self.weights)
-        #print("self.biases",self.biases)
 
         for i,(b, w) in enumerate (zip(self.biases, self.weights)):
             #print("b",b)
@@ -176,8 +153,6 @@ class Network(object):
             z = np.dot(w, activation)+b
             zs.append(z)
             activation = sigmoid(z)
-            #print("acivation", activation)
-            #activations.append(activation)
             activations[i+1] = activation
         
         #Check the collected activations
@@ -185,7 +160,6 @@ class Network(object):
 
         # backward pass
         delta = self.cost_derivative(activations[-1], y) * sigmoid_prime(zs[-1])
-        #print("delta", delta)
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         # Note that the variable l in the loop below is used a little
@@ -232,7 +206,7 @@ class Network(object):
         test_logLikelihood_lst = [np.mean(np.array([-np.sum(np.nan_to_num(np.log(a))) for (a, y) in test_result_lst]))]
             
         #Combine all the Error meausrment metrics into a List format.
-        outLst=test_mse_lst+test_crossEntropy_lst+test_logLikelihood_lst+[correct_case] + accuracy
+        outLst=[correct_case] + accuracy  + test_mse_lst+test_crossEntropy_lst+test_logLikelihood_lst
         
         return( outLst)
 
@@ -240,9 +214,6 @@ class Network(object):
         """Return the vector of partial derivatives \partial C_x /
         \partial a for the output activations."""
         return (output_activations-y)
-
-
-
 
 
 #### Miscellaneous functions
