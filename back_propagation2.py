@@ -372,7 +372,7 @@ class Network(object):
                             for w, nw in zip(self.weights, nabla_w)]
             self.biases = [b-(eta/len(mini_batch))*nb
                            for b, nb in zip(self.biases, nabla_b)]
-            print("L2 mini self.weights", self.weights)
+            #print("L2 mini self.weights", self.weights)
         
         #Regularization = "L1"
         if self.regularization =="L1":
@@ -384,11 +384,11 @@ class Network(object):
                 aa[aa>0] = int(1) #sgn_w=+1 when w>0
                 aa[aa<0] = int(-1) #sgn_w=-1 when w<0
                 sgn_ws.append(aa)
-            print("sgn_ws", sgn_ws)
-            print("self.weights", self.weights)
+            #print("sgn_ws", sgn_ws)
+            #print("self.weights", self.weights)
             self.weights = [w - (eta*lmbda/n)*sgn_w - (eta/len(mini_batch))*nw 
                             for w, nw, sgn_w in zip(self.weights, nabla_w, sgn_ws)]
-            print("L1 mini self.weights", self.weights)
+            #print("L1 mini self.weights", self.weights)
         else:
             pass
 
@@ -506,19 +506,16 @@ class Network(object):
             a = self.feedforward(x)
             if convert: y = vectorized_result(y)
             cost += self.cost.fn(a, y)/len(data)
-            print("cost", cost)
+            #print("cost", cost)
         if self.regularization =="L2" or self.regularization==None:
-            for w in self.weights:
-                print("abs(w)",abs(w))
-               # print("np.sum", sum(np.linalg.norm(w)**2))
+            #print("1.self.weights", self.weights)
+            #print(lmbda, len(data))
+            #print("1.cost",sum(np.linalg.norm(w) for w in self.weights))
             cost += 0.5*(lmbda/len(data))*sum(np.linalg.norm(w)**2 for w in self.weights)
-            print("L2 total cost", cost)
+            #print("L2 total cost", cost)
         elif self.regularization == "L1":
-            for w in self.weights:
-                print("abs(w)",abs(w))
-                print("np.sum", sum(abs(w)))
-            cost += (lmbda/len(data))*sum(np.abs(w) for w in self.weights)
-            print("L1 total_cost", cost)
+            cost += (lmbda/len(data))*np.sum([np.sum(np.abs(w)) for w in self.weights])
+            #print("L1 total_cost", cost)
         else:
             pass
         return cost
