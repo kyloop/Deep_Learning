@@ -88,6 +88,8 @@ class LogLikelihood(object):
         #print("vector", val)
         return(val)
 
+
+
 #### 9/2018 nt:
 #### Definitions of the activation functions (as function classes)
 class Sigmoid(object):
@@ -111,7 +113,6 @@ class Softmax(object):
         """The softmax of vector z."""
         #print("Softmax fn", np.exp(z)/np.sum(np.exp(z)))
         return (np.exp(z)/np.sum(np.exp(z)))
-
     @classmethod
     def derivative(cls,z):
         """Derivative of the softmax.  
@@ -125,19 +126,26 @@ class Softmax(object):
 class Tanh(object):
     @staticmethod
     def fn(z):
+        #print("Tahn fn", (np.exp(z) - np.exp(-z)) / (np.exp(z)+np.exp(-z)))
         return (np.exp(z) - np.exp(-z)) / (np.exp(z)+np.exp(-z))
+    @classmethod
     def derivative(cls,z):
+        #print("Tanh Der",1-((cls.fn(z))**2))
         return 1-((cls.fn(z))**2)
+        
 
 class ReLU(object):
     @staticmethod
     def fn(z):
-        a=z
-        a[a<=0]=0
-        return a
+        #a=z
+        z[z<=0]=0
+        #print("ReLU fn", z)
+        return z
+    @classmethod
     def derivative(cls,z):
         var = cls.fn(z)
         var[var>0] = 1
+        #print("ReLU Der", var)
         return var
 
 
@@ -179,13 +187,32 @@ class Network(object):
         cost=QuadraticCost, 
         act_hidden=Sigmoid,
         act_output=None, 
-        regularization=None, dropoutpercent=0.0):
+        regularization=None, 
+        dropoutpercent=0.0):
+        
         self.cost=cost
         self.act_hidden = act_hidden
+
         if act_output == None:
             self.act_output = self.act_hidden
         else:
             self.act_output = act_output
+
+        # Change act_output function to Sigmoid if act_output=Tanh and cost!=QuadraticCost
+        if self.act_output == Tanh and self.cost != QuadraticCost:
+            self.act_output = Sigmoid
+            print("Activation function Output changed to Sigmoid function")
+
+        #Cost changed to LogLikelihood when act_output function is Softmax
+        if self.act_output==Softmax:
+            self.cost = LogLikelihood
+            print("Cost Function is changed to LogLikelihood because act_output is Softmax function")
+
+        #Change the activation function of hidden layer to Sigmoid function if hidden function is Softmax
+        if self.act_hidden==Softmax:
+            self.act_hidden=Sigmoid
+            print("Hidden activation function is changed to Sigmoid Function")
+
         self.regularization = regularization
         self.dropoutpercent = dropoutpercent
         
@@ -228,13 +255,21 @@ class Network(object):
 
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
+        cnt=1
         for b, w in zip(self.biases, self.weights):
             ## 10/2018: THIS NEEDS CHANGE. The previous line (commented) 
             ##  doesn'twork any more.  The new scheme is written which 
             ##  utilizes function class.  But this works but is still 
             ##  incorrect because you have to consider act_output as well.
             #a = sigmoid(np.dot(w, a)+b)
-            a = (self.act_hidden).fn(np.dot(w, a)+b)
+            #print("len(self.biases)",len(self.biases))
+            if cnt == len(self.weights):
+                #print("Feedforward act_output")
+                a = (self.act_output).fn(np.dot(w, a)+b)
+            else: 
+                #print("Feedforward act_hidden")
+                a = (self.act_hidden).fn(np.dot(w, a)+b)
+                cnt+=1
         return a
 
     ## 9/2018 nt: additional parameter 'no_convert' to control the vectorization of the target.
@@ -279,8 +314,7 @@ class Network(object):
                 training_data[k:k+mini_batch_size]
                 for k in range(0, n, mini_batch_size)]#xrange(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
-                self.update_mini_batch(
-                    mini_batch, eta, lmbda, len(training_data))
+                self.update_mini_batch(mini_batch, eta, lmbda, len(training_data))
                 
             print ("Epoch %s training complete" % j)
             if monitor_training_cost:
@@ -330,10 +364,33 @@ class Network(object):
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-        self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw
-                        for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b-(eta/len(mini_batch))*nb
-                       for b, nb in zip(self.biases, nabla_b)]
+        
+        #Regularization = "L2" or default(i.e. lmbda=0)
+        if self.regularization ==  "L2" or self.regularization ==  None:
+            
+            self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw 
+                            for w, nw in zip(self.weights, nabla_w)]
+            self.biases = [b-(eta/len(mini_batch))*nb
+                           for b, nb in zip(self.biases, nabla_b)]
+            print("L2 mini self.weights", self.weights)
+        
+        #Regularization = "L1"
+        if self.regularization =="L1":
+            #Initialize sgn(w)
+            sgn_ws=[]
+            #Catgorize sgn_w value to 1 or -1 or 0
+            for w in self.weights:
+                aa=w.copy()
+                aa[aa>0] = int(1) #sgn_w=+1 when w>0
+                aa[aa<0] = int(-1) #sgn_w=-1 when w<0
+                sgn_ws.append(aa)
+            print("sgn_ws", sgn_ws)
+            print("self.weights", self.weights)
+            self.weights = [w - (eta*lmbda/n)*sgn_w - (eta/len(mini_batch))*nw 
+                            for w, nw, sgn_w in zip(self.weights, nabla_w, sgn_ws)]
+            print("L1 mini self.weights", self.weights)
+        else:
+            pass
 
     def backprop(self, x, y):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
@@ -346,13 +403,33 @@ class Network(object):
         activation = x
         activations = [x] # list to store all the activations, layer by layer
         zs = [] # list to store all the z vectors, layer by layer
+        cnt=1
         for b, w in zip(self.biases, self.weights):
-            z = np.dot(w, activation)+b
-            zs.append(z)
-            ## 9/2018 nt: changed
-            #activation = sigmoid(z)
-            activation = (self.act_hidden).fn(z)
-            activations.append(activation)
+            if cnt==len(self.biases):
+                z = np.dot(w, activation)+b
+                zs.append(z)
+                ## 9/2018 nt: changed
+                #activation = sigmoid(z)
+                activation = (self.act_output).fn(z)
+                
+                #Normalize activation in (0,1) Scale if act_hidden = Tanh function and cost function is NOT QuadraticCost
+                if self.act_output == Tanh and self.cost!= QuadraticCost:
+                    if (np.max(activation) - np.min(activation)):
+                        activation = (activation - np.min(activation)) / (np.max(activation) - np.min(activation))
+                    #print("Normalize activation", activation)
+                activations.append(activation)
+            else: 
+                z = np.dot(w, activation)+b
+                zs.append(z)
+                activation = (self.act_hidden).fn(z)
+                
+                #Normalize activation in (0,1) Scale if act_hidden = Tanh function and cost function is NOT QuadraticCost
+                if self.act_hidden == Tanh and self.cost!= QuadraticCost:
+                    if (np.max(activation) - np.min(activation)) :
+                        activation = (activation - np.min(activation)) / (np.max(activation) - np.min(activation))
+                    #print("Normalize activation", activation)
+                activations.append(activation)
+                cnt+=1
 
         # backward pass
         ## 9/2018 nt: Cost and activation functions are parameterized now.
@@ -423,14 +500,31 @@ class Network(object):
         the validation or test data.  See comments on the similar (but
         reversed) convention for the ``accuracy`` method, above.
         """
+        aa=0.0
         cost = 0.0
         for x, y in data:
             a = self.feedforward(x)
             if convert: y = vectorized_result(y)
             cost += self.cost.fn(a, y)/len(data)
-        cost += 0.5*(lmbda/len(data))*sum(
-            np.linalg.norm(w)**2 for w in self.weights)
+            print("cost", cost)
+        if self.regularization =="L2" or self.regularization==None:
+            for w in self.weights:
+                print("abs(w)",abs(w))
+               # print("np.sum", sum(np.linalg.norm(w)**2))
+            cost += 0.5*(lmbda/len(data))*sum(np.linalg.norm(w)**2 for w in self.weights)
+            print("L2 total cost", cost)
+        elif self.regularization == "L1":
+            for w in self.weights:
+                print("abs(w)",abs(w))
+                print("np.sum", sum(abs(w)))
+            cost += (lmbda/len(data))*sum(np.abs(w) for w in self.weights)
+            print("L1 total_cost", cost)
+        else:
+            pass
         return cost
+
+
+
 
     def save(self, filename):
         """Save the neural network to the file ``filename``."""
