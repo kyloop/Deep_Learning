@@ -40,23 +40,19 @@ import numpy as np
 #### 10/2018 nt:
 #### Definitions of the cost functions (as function classes)
 class QuadraticCost(object):
-
     @staticmethod
     def fn(a, y):
         """Return the cost associated with an output ``a`` and desired output ``y``.
         """
-        #print("scalar", 0.5*np.linalg.norm(y-a)**2)
         return 0.5*np.linalg.norm(y-a)**2
 
     ## 10/2018 nt: addition
     @staticmethod
     def derivative(a, y):
         """Return the first derivative of the function."""
-        #print("vector", -(y-a))
         return -(y-a)
 
 class CrossEntropyCost(object):
-
     @staticmethod
     def fn(a, y):
         """Return the cost associated with an output ``a`` and desired output
@@ -65,89 +61,85 @@ class CrossEntropyCost(object):
         in the same slot, then the expression (1-y)*np.log(1-a)
         returns nan.  The np.nan_to_num ensures that that is converted
         to the correct value (0.0).
-
         """
-        #print("scalar", np.sum(np.nan_to_num(-y*np.log(a)-(1-y)*np.log(1-a))))
         return np.sum(np.nan_to_num(-y*np.log(a)-(1-y)*np.log(1-a)))
-
     @staticmethod
     def derivative(a, y):
         """Return the first derivative of the function."""
-        #print('vector', (a-y)/ (a*(1-a)))
-        return (a-y)/ (a*(1-a))
-         
+        lst=[]
+        for a1, y1 in zip(a,y):
+            a2, y2 = a1[0], y1[0]
+            '''Assign ZERO to Derivative to avoid zero nominator'''
+            if a2 == 0 or a2 ==1:
+                lst.append(0)
+            else:
+                lst.append((a2-y2)/ (a2*(1-a2)))
+        #Reshape Derivative array
+        lst=np.array(lst).reshape((len(lst),1))
+        return lst
+                 
 class LogLikelihood(object):
     @staticmethod
     def fn(a, y):
-        #print("Scalar",-np.log(a[np.argmax(y)])[0])
+        '''Only taking Log to the Corresponding Activation Value of Target label =1'''
         return (-np.log(a[np.argmax(y)])[0])
     @staticmethod
     def derivative(a, y):
         val = np.zeros(a.shape)
-        val[np.argmax(y)] = -1/(a[np.argmax(y)])
-        #print("vector", val)
-        return(val)
-
-
+        '''Assign ZERO to Derivative if Corresponding Activation value
+            of Target label is ZERO in order to avoid zero nominator'''
+        if (a[np.argmax(y)])[0] == 0:
+            return val
+        else: 
+            val[np.argmax(y)] = -1/(a[np.argmax(y)])
+            return(val)
 
 #### 9/2018 nt:
 #### Definitions of the activation functions (as function classes)
 class Sigmoid(object):
-    
     @staticmethod
     def fn(z):
         """The sigmoid function."""
-        #print("Sigmod fn",1.0/(1.0+np.exp(-z)))
         return 1.0/(1.0+np.exp(-z))
-
     @classmethod
     def derivative(cls,z):
         """Derivative of the sigmoid function."""
-        #print("Sigmoid DEr", cls.fn(z)*(1-cls.fn(z)))
         return cls.fn(z)*(1-cls.fn(z))
+
+class Tanh(object):
+    @staticmethod
+    def fn(z):
+        return (np.exp(z) - np.exp(-z)) / (np.exp(z)+np.exp(-z))
+    @classmethod
+    def derivative(cls,z):
+        return 1-((cls.fn(z))**2)
+        
+class ReLU(object):
+    @staticmethod
+    def fn(z):
+        z[z<=0]=0
+        return z
+    @classmethod
+    def derivative(cls,z):
+        var = cls.fn(z)
+        var[var>0] = 1
+        return var
 
 class Softmax(object):
     @staticmethod
     # Parameter z is an array of shape (len(z), 1).
     def fn(z):
         """The softmax of vector z."""
-        #print("Softmax fn", np.exp(z)/np.sum(np.exp(z)))
-        return (np.exp(z)/np.sum(np.exp(z)))
+        #return (np.exp(z)/np.sum(np.exp(z)))
+        '''Softmax activation function - Stable Version (Avoid ZERO numerator etc)'''
+        return np.exp(z-np.max(z)) / np.sum(np.exp(z-np.max(z)))
     @classmethod
     def derivative(cls,z):
         """Derivative of the softmax.  
         IMPORTANT: The derivative is an N*N matrix.
         """
-        a = cls.fn(z) # obtain the softmax vector
-        #print("Softmax DER",np.diagflat(a) - np.dot(a, a.T))
+        a = cls.fn(z) # obtain the softmax activation vector
         return np.diagflat(a) - np.dot(a, a.T)
-    
-
-class Tanh(object):
-    @staticmethod
-    def fn(z):
-        #print("Tahn fn", (np.exp(z) - np.exp(-z)) / (np.exp(z)+np.exp(-z)))
-        return (np.exp(z) - np.exp(-z)) / (np.exp(z)+np.exp(-z))
-    @classmethod
-    def derivative(cls,z):
-        #print("Tanh Der",1-((cls.fn(z))**2))
-        return 1-((cls.fn(z))**2)
-        
-
-class ReLU(object):
-    @staticmethod
-    def fn(z):
-        #a=z
-        z[z<=0]=0
-        #print("ReLU fn", z)
-        return z
-    @classmethod
-    def derivative(cls,z):
-        var = cls.fn(z)
-        var[var>0] = 1
-        #print("ReLU Der", var)
-        return var
-
 
 #### Main Network class
 class Network(object):
@@ -159,7 +151,8 @@ class Network(object):
         act_hidden=Sigmoid,
         act_output=None, 
         regularization=None, 
-        dropoutpercent=0.0):
+        dropoutpercent=0.0,
+        dropoutmask=None):
         """The list ``sizes`` contains the number of neurons in the respective
         layers of the network.  For example, if the list was [2, 3, 1]
         then it would be a three-layer network, with the first layer
@@ -181,6 +174,7 @@ class Network(object):
             self.act_output = act_output
         self.regularization = regularization
         self.dropoutpercent = dropoutpercent
+        print("self.sizes", self.sizes)
 
     ## 10/2018 nt: convenience function for setting hyper-parameters
     def set_parameters(self, 
@@ -198,20 +192,20 @@ class Network(object):
         else:
             self.act_output = act_output
 
-        # Change act_output function to Sigmoid if act_output=Tanh and cost!=QuadraticCost
+        # Overide act_output function to Sigmoid if act_output=Tanh and cost!=QuadraticCost
         if self.act_output == Tanh and self.cost != QuadraticCost:
             self.act_output = Sigmoid
-            print("Activation function Output changed to Sigmoid function")
+            print("Activation function of Output Layer is overrided to Sigmoid function")
 
-        #Cost changed to LogLikelihood when act_output function is Softmax
-        if self.act_output==Softmax:
+        #Overide Cost function to LogLikelihood when act_output function is Softmax
+        if self.act_output==Softmax and self.cost != LogLikelihood:
             self.cost = LogLikelihood
-            print("Cost Function is changed to LogLikelihood because act_output is Softmax function")
+            print("Cost Function is overridded to LogLikelihood because act_output is set as Softmax function")
 
-        #Change the activation function of hidden layer to Sigmoid function if hidden function is Softmax
+        #Overide the activation function of hidden layer to Sigmoid function if hidden function is Softmax
         if self.act_hidden==Softmax:
             self.act_hidden=Sigmoid
-            print("Hidden activation function is changed to Sigmoid Function")
+            print("Activation function of Hidden Layer is overridded to Sigmoid Function")
 
         self.regularization = regularization
         self.dropoutpercent = dropoutpercent
@@ -256,6 +250,7 @@ class Network(object):
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
         cnt=1
+        #print("len(self.weights)", len(self.weights))
         for b, w in zip(self.biases, self.weights):
             ## 10/2018: THIS NEEDS CHANGE. The previous line (commented) 
             ##  doesn'twork any more.  The new scheme is written which 
@@ -264,12 +259,19 @@ class Network(object):
             #a = sigmoid(np.dot(w, a)+b)
             #print("len(self.biases)",len(self.biases))
             if cnt == len(self.weights):
-                #print("Feedforward act_output")
-                a = (self.act_output).fn(np.dot(w, a)+b)
+                #print("act_output cnt", cnt)
+                if self.act_output == None:
+                    a = (self.act_hidden).fn(np.dot(w, a)+b)
+                else:
+                    a = (self.act_output).fn(np.dot(w, a)+b)
+                cnt=1
             else: 
-                #print("Feedforward act_hidden")
+                #print("act_hidden cnt", cnt)
                 a = (self.act_hidden).fn(np.dot(w, a)+b)
                 cnt+=1
+            #print("cnt", cnt)
+           #a = (self.act_hidden).fn(np.dot(w, a)+b)
+            #cnt+=1
         return a
 
     ## 9/2018 nt: additional parameter 'no_convert' to control the vectorization of the target.
@@ -312,7 +314,7 @@ class Network(object):
             #random.shuffle(training_data)
             mini_batches = [
                 training_data[k:k+mini_batch_size]
-                for k in range(0, n, mini_batch_size)]#xrange(0, n, mini_batch_size)]
+                                for k in range(0, n, mini_batch_size)]#xrange(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
                 self.update_mini_batch(mini_batch, eta, lmbda, len(training_data))
                 
@@ -346,8 +348,7 @@ class Network(object):
                     #self.accuracy(evaluation_data), n_data))
                     accuracy, n_data))
             print ('')
-        return evaluation_cost, evaluation_accuracy, \
-            training_cost, training_accuracy
+        return evaluation_cost, evaluation_accuracy, training_cost, training_accuracy
         
     ## 10/2018: THIS NEEDS CHANGE to incorporate self.regularization. 
     def update_mini_batch(self, mini_batch, eta, lmbda, n):
@@ -360,22 +361,31 @@ class Network(object):
         """
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+
+        '''Generate Dropout Mask when dropoutpercent is set larger than 0.0'''
+        if self.dropoutpercent > 0.0:
+            dropout_form=[]
+            for i in range(1,len(self.sizes)-1):
+                '''
+                Generate dropout form based on the input dropout probabilities.
+                the dropout form form/List is scaled by the dropout probabilities: (1-self.dropoutpercent)
+                '''
+                dropout_form.append(np.random.binomial(1,1-self.dropoutpercent, size=(self.sizes[i],1))/(1-self.dropoutpercent))
+            self.dropoutmask = dropout_form
+        
+        '''Distribute '''
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
         
-        #Regularization = "L2" or default(i.e. lmbda=0)
+        #Regularization = "L2"
         if self.regularization ==  "L2" or self.regularization ==  None:
-            
-            self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw 
-                            for w, nw in zip(self.weights, nabla_w)]
-            self.biases = [b-(eta/len(mini_batch))*nb
-                           for b, nb in zip(self.biases, nabla_b)]
-            #print("L2 mini self.weights", self.weights)
+            self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw for w, nw in zip(self.weights, nabla_w)]
+            self.biases = [b-(eta/len(mini_batch))*nb for b, nb in zip(self.biases, nabla_b)]
         
         #Regularization = "L1"
-        if self.regularization =="L1":
+        elif self.regularization =="L1":
             #Initialize sgn(w)
             sgn_ws=[]
             #Catgorize sgn_w value to 1 or -1 or 0
@@ -384,13 +394,13 @@ class Network(object):
                 aa[aa>0] = int(1) #sgn_w=+1 when w>0
                 aa[aa<0] = int(-1) #sgn_w=-1 when w<0
                 sgn_ws.append(aa)
-            #print("sgn_ws", sgn_ws)
-            #print("self.weights", self.weights)
             self.weights = [w - (eta*lmbda/n)*sgn_w - (eta/len(mini_batch))*nw 
-                            for w, nw, sgn_w in zip(self.weights, nabla_w, sgn_ws)]
-            #print("L1 mini self.weights", self.weights)
+                                for w, nw, sgn_w in zip(self.weights, nabla_w, sgn_ws)]
+        #Regularization = None
         else:
-            pass
+            self.weights = [w-(eta/len(mini_batch))*nw for w, nw in zip(self.weights, nabla_w)]
+            self.biases = [b-(eta/len(mini_batch))*nb for b, nb in zip(self.biases, nabla_b)]
+
 
     def backprop(self, x, y):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
@@ -399,36 +409,52 @@ class Network(object):
         to ``self.biases`` and ``self.weights``."""
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        
         # feedforward
         activation = x
         activations = [x] # list to store all the activations, layer by layer
         zs = [] # list to store all the z vectors, layer by layer
-        cnt=1
-        for b, w in zip(self.biases, self.weights):
+        cnt=1 #Initialize the number of Activation Layer
+        for b, w in zip(self.biases, self.weights): #This section only apply to Output Layer
             if cnt==len(self.biases):
                 z = np.dot(w, activation)+b
                 zs.append(z)
-                ## 9/2018 nt: changed
-                #activation = sigmoid(z)
-                activation = (self.act_output).fn(z)
                 
-                #Normalize activation in (0,1) Scale if act_hidden = Tanh function and cost function is NOT QuadraticCost
+                #Assign act_hidden to as act_output function if act_output == None
+                if self.act_output == None:
+                    activation = (self.act_hidden).fn(z)
+                else:
+                    activation = (self.act_output).fn(z)
+                cnt=1
+                                
+                '''Rescale/ Normalize activation in (0,1) Scale if 
+                act_hidden = Tanh function and cost function is NOT QuadraticCost
+                '''
                 if self.act_output == Tanh and self.cost!= QuadraticCost:
-                    if (np.max(activation) - np.min(activation)):
+                    if (np.max(activation) - np.min(activation))!=0: #Avoid Zero Nominator
                         activation = (activation - np.min(activation)) / (np.max(activation) - np.min(activation))
-                    #print("Normalize activation", activation)
+                
+                #Store activations to one List 
                 activations.append(activation)
-            else: 
+                #Reset the number of Activation layer to 1 after output layer
+                cnt=1
+            
+            else: #This section only apply to Hidden layer
                 z = np.dot(w, activation)+b
                 zs.append(z)
                 activation = (self.act_hidden).fn(z)
-                
-                #Normalize activation in (0,1) Scale if act_hidden = Tanh function and cost function is NOT QuadraticCost
-                if self.act_hidden == Tanh and self.cost!= QuadraticCost:
-                    if (np.max(activation) - np.min(activation)) :
-                        activation = (activation - np.min(activation)) / (np.max(activation) - np.min(activation))
-                    #print("Normalize activation", activation)
+                 
+                '''Dropout function is activated if dropoutpercent >0
+                Example: activation = [0.9,0.8,0.1], dropout mask = [0,1,1] 
+                ---> dropout output = [0.9,0.8,0.1] * [0,1,1] 
+                ---> dropout output = [0.0, 0.8, 0.1]
+                '''
+                if self.dropoutpercent > 0.0:
+                    dropout_form = self.dropoutmask            
+                    activation*=dropout_form[cnt-1] #Turn randomed nodes becoming Zero
                 activations.append(activation)
+                
+                #Incrementing/Counting the number of Activation Layer
                 cnt+=1
 
         # backward pass
@@ -500,24 +526,23 @@ class Network(object):
         the validation or test data.  See comments on the similar (but
         reversed) convention for the ``accuracy`` method, above.
         """
+        
         aa=0.0
+
         cost = 0.0
         for x, y in data:
             a = self.feedforward(x)
             if convert: y = vectorized_result(y)
             cost += self.cost.fn(a, y)/len(data)
-            #print("cost", cost)
+        
+        '''When regularization is set to be "L2" '''
         if self.regularization =="L2" or self.regularization==None:
-            #print("1.self.weights", self.weights)
-            #print(lmbda, len(data))
-            #print("1.cost",sum(np.linalg.norm(w) for w in self.weights))
-            cost += 0.5*(lmbda/len(data))*sum(np.linalg.norm(w)**2 for w in self.weights)
-            #print("L2 total cost", cost)
-        elif self.regularization == "L1":
+            cost += 0.5*(lmbda/len(data))*sum( np.linalg.norm(w)**2 for w in self.weights)
+
+        '''When regularization is set to be "L1" '''
+        if self.regularization == "L1":
             cost += (lmbda/len(data))*np.sum([np.sum(np.abs(w)) for w in self.weights])
-            #print("L1 total_cost", cost)
-        else:
-            pass
+        
         return cost
 
 
